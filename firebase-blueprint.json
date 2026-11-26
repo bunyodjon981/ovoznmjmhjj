@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "GhostlyUser": {
+      "title": "GhostlyUser",
+      "description": "Synced Ghostly Messenger user record with Telegram profile metadata, connected channels, and 24-hour spam moderation state.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the signed-in user" },
+        "telegramUserId": { "type": "integer", "description": "Telegram numeric user ID" },
+        "fullName": { "type": "string", "description": "Telegram full display name" },
+        "username": { "type": "string", "description": "Telegram primary username without @" },
+        "phoneNumber": { "type": "string", "description": "Telegram phone number with + prefix" },
+        "bio": { "type": "string", "description": "User bio text" },
+        "premiumAccount": { "type": "boolean", "description": "Whether Telegram account has Premium" },
+        "channelSummaries": { "type": "array", "description": "Bounded list of user connected channel summaries" },
+        "spamBanned": { "type": "boolean", "description": "Admin-controlled spam flag" },
+        "spamUntilMs": { "type": "integer", "description": "Epoch milliseconds when 24h spam restriction automatically expires" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": [
+        "userId",
+        "telegramUserId",
+        "fullName",
+        "username",
+        "phoneNumber",
+        "bio",
+        "premiumAccount",
+        "channelSummaries",
+        "spamBanned",
+        "spamUntilMs",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global Ghostly channel auto-join configuration managed by Admin.",
+      "type": "object",
+      "properties": {
+        "channelLink": { "type": "string", "description": "Telegram channel link or @username for forced auto-join" },
+        "enabled": { "type": "boolean", "description": "Whether forced channel auto-join is active" },
+        "updatedBy": { "type": "string", "description": "Admin UID who updated the config" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": ["channelLink", "enabled", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "SupportThread": {
+      "title": "SupportThread",
+      "description": "Per-user +47777 support conversation summary routed to Admin Panel inbox.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "telegramUserId": { "type": "integer", "description": "Sender Telegram numeric ID" },
+        "senderName": { "type": "string", "description": "Sender display name" },
+        "senderUsername": { "type": "string", "description": "Sender username" },
+        "senderPhone": { "type": "string", "description": "Sender phone number" },
+        "lastMessageText": { "type": "string", "description": "Latest message preview" },
+        "lastMessageFromAdmin": { "type": "boolean", "description": "Whether latest message was sent by admin" },
+        "unreadByAdmin": { "type": "boolean", "description": "Whether admin has unread messages in this thread" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": [
+        "userId",
+        "telegramUserId",
+        "senderName",
+        "senderUsername",
+        "senderPhone",
+        "lastMessageText",
+        "lastMessageFromAdmin",
+        "unreadByAdmin",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SupportMessage": {
+      "title": "SupportMessage",
+      "description": "Individual message inside a +47777 support thread.",
+      "type": "object",
+      "properties": {
+        "threadUserId": { "type": "string", "description": "Parent thread userId" },
+        "senderUid": { "type": "string", "description": "Firebase Auth UID of sender" },
+        "fromAdmin": { "type": "boolean", "description": "True if sent by admin reply" },
+        "text": { "type": "string", "description": "Message body" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" }
+      },
+      "required": ["threadUserId", "senderUid", "fromAdmin", "text", "createdAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted admin role marker document.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "description": "Admin role identifier" }
+      },
+      "required": ["role"]
+    }
+  },
+  "firestore": {
+    "/ghostly_users/{userId}": {
+      "schema": { "$ref": "#/entities/GhostlyUser" },
+      "description": "User directory, connected channel summaries, and 24-hour spam restriction state."
+    },
+    "/app_config/{docId}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Global app configuration document (ghostly_channel)."
+    },
+    "/support_threads/{userId}": {
+      "schema": { "$ref": "#/entities/SupportThread" },
+      "description": "Support conversations opened from +47777 Help chat."
+    },
+    "/support_threads/{userId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/SupportMessage" },
+      "description": "Support chat messages between user and Admin Panel."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Trusted admin allowlist records."
+    }
+  }
+}

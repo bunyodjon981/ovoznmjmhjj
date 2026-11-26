@@ -1,0 +1,199 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'bunyodjon370@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidGhostlyUser(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.telegramUserId is int && data.telegramUserId >= 0 &&
+             data.fullName is string && data.fullName.size() <= 150 &&
+             data.username is string && data.username.size() <= 100 &&
+             data.phoneNumber is string && data.phoneNumber.size() <= 40 &&
+             data.bio is string && data.bio.size() <= 500 &&
+             data.premiumAccount is bool &&
+             data.channelSummaries is list && data.channelSummaries.size() <= 50 &&
+             (data.channelSummaries.size() == 0 || data.channelSummaries[0] is string) &&
+             data.spamBanned is bool &&
+             data.spamUntilMs is int && data.spamUntilMs >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAppConfig(data) {
+      return data.channelLink is string && data.channelLink.size() <= 300 &&
+             data.enabled is bool &&
+             data.updatedBy is string && data.updatedBy.size() > 0 && data.updatedBy.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSupportThread(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.telegramUserId is int && data.telegramUserId >= 0 &&
+             data.senderName is string && data.senderName.size() <= 150 &&
+             data.senderUsername is string && data.senderUsername.size() <= 100 &&
+             data.senderPhone is string && data.senderPhone.size() <= 40 &&
+             data.lastMessageText is string && data.lastMessageText.size() <= 2000 &&
+             data.lastMessageFromAdmin is bool &&
+             data.unreadByAdmin is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSupportMessage(data) {
+      return data.threadUserId is string && data.threadUserId.size() > 0 && data.threadUserId.size() <= 128 &&
+             data.senderUid is string && data.senderUid.size() > 0 && data.senderUid.size() <= 128 &&
+             data.fromAdmin is bool &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 2000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    match /ghostly_users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isOwner(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'telegramUserId', 'fullName', 'username', 'phoneNumber',
+                         'bio', 'premiumAccount', 'channelSummaries', 'spamBanned', 'spamUntilMs',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'telegramUserId', 'fullName', 'username', 'phoneNumber',
+                         'bio', 'premiumAccount', 'channelSummaries', 'spamBanned', 'spamUntilMs',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidGhostlyUser(incoming()) &&
+                       (isAdmin() || (incoming().spamBanned == false && incoming().spamUntilMs == 0));
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidGhostlyUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+                           'spamBanned', 'spamUntilMs', 'updatedAt'
+                         ])) ||
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly([
+                           'telegramUserId', 'fullName', 'username', 'phoneNumber', 'bio',
+                           'premiumAccount', 'channelSummaries', 'updatedAt'
+                         ]))
+                       );
+
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    match /app_config/{docId} {
+      allow get: if isSignedIn() && docId == 'ghostly_channel';
+      allow create: if isAdmin() &&
+                       docId == 'ghostly_channel' &&
+                       incoming().updatedBy == request.auth.uid &&
+                       incoming().keys().hasAll(['channelLink', 'enabled', 'updatedBy', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['channelLink', 'enabled', 'updatedBy', 'createdAt', 'updatedAt']) &&
+                       isValidAppConfig(incoming());
+      allow update: if isAdmin() &&
+                       docId == 'ghostly_channel' &&
+                       incoming().updatedBy == request.auth.uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidAppConfig(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'channelLink', 'enabled', 'updatedBy', 'updatedAt'
+                       ]);
+      allow delete: if isAdmin() && docId == 'ghostly_channel';
+    }
+
+    match /support_threads/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isOwner(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().lastMessageFromAdmin == false &&
+                       incoming().keys().hasAll([
+                         'userId', 'telegramUserId', 'senderName', 'senderUsername', 'senderPhone',
+                         'lastMessageText', 'lastMessageFromAdmin', 'unreadByAdmin', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'telegramUserId', 'senderName', 'senderUsername', 'senderPhone',
+                         'lastMessageText', 'lastMessageFromAdmin', 'unreadByAdmin', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidSupportThread(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidSupportThread(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+                           'lastMessageText', 'lastMessageFromAdmin', 'unreadByAdmin', 'updatedAt'
+                         ])) ||
+                         (isOwner(userId) && incoming().lastMessageFromAdmin == false &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'telegramUserId', 'senderName', 'senderUsername', 'senderPhone',
+                             'lastMessageText', 'lastMessageFromAdmin', 'unreadByAdmin', 'updatedAt'
+                           ]))
+                       );
+
+      allow delete: if isAdmin() && isValidId(userId);
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(messageId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && (isOwner(userId) || isAdmin());
+
+        allow create: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(messageId) &&
+                         incoming().threadUserId == userId &&
+                         incoming().senderUid == request.auth.uid &&
+                         incoming().keys().hasAll(['threadUserId', 'senderUid', 'fromAdmin', 'text', 'createdAt']) &&
+                         incoming().keys().hasOnly(['threadUserId', 'senderUid', 'fromAdmin', 'text', 'createdAt']) &&
+                         isValidSupportMessage(incoming()) &&
+                         ((isOwner(userId) && incoming().fromAdmin == false) || (isAdmin() && incoming().fromAdmin == true)) &&
+                         exists(/databases/$(database)/documents/support_threads/$(userId));
+
+        allow update, delete: if isAdmin() && isValidId(userId) && isValidId(messageId);
+      }
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && isOwner(uid);
+      allow list, create, update, delete: if false;
+    }
+  }
+}

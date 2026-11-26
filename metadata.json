@@ -1,0 +1,6 @@
+{
+  "name": "Ghostly Messenger",
+  "description": "Ghostly Messenger — full-featured Telegram client powered by TDLib with Stories, Gifts, Stars, Premium, custom emojis, voice/video notes, and Ghostly Support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
